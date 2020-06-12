@@ -7,6 +7,11 @@ from yolov3.utils.datasets import *
 from yolov3.utils.utils import *
 from deep_sort import DeepSort
 
+import sys
+sys.path.append('/opt/ros/kinetic/lib/python2.7/dist-packages')
+import rospy
+sys.path.remove('/opt/ros/kinetic/lib/python2.7/dist-packages')
+
 deepsort = DeepSort("deep_sort/deep/checkpoint/ckpt.t7")
 palette = (2 ** 11 - 1, 2 ** 15 - 1, 2 ** 20 - 1)
 
@@ -51,6 +56,7 @@ def detect(save_img=True):
     img_size = (320, 192) if ONNX_EXPORT else opt.img_size  # (320, 192) or (416, 256) or (608, 352) for (height, width)
     out, source, weights, half, view_img, save_txt = opt.output, opt.source, opt.weights, opt.half, opt.view_img, opt.save_txt
     webcam = source == '0' or source.startswith('rtsp') or source.startswith('http') or source.endswith('.txt')
+    intelcam = source == 'intelcam'
 
     # Initialize
     device = torch_utils.select_device(device='cpu' if ONNX_EXPORT else opt.device)
@@ -83,6 +89,13 @@ def detect(save_img=True):
         view_img = True
         torch.backends.cudnn.benchmark = True  # set True to speed up constant image size inference
         dataset = LoadStreams(source, img_size=img_size, half=half)
+
+    elif intelcam:
+        save_img = False
+        view_img = True
+        torch.backends.cudnn.benchmark = True  # set True to speed up constant image size inference
+        dataset = LoadIntelCam(img_size=img_size, half=half)
+
     else:
         save_img = True
         dataset = LoadImages(source, img_size=img_size, half=half)
@@ -112,6 +125,8 @@ def detect(save_img=True):
         for i, det in enumerate(pred):  # detections per image
             if webcam:  # batch_size >= 1
                 p, s, im0 = path[i], '%g: ' % i, im0s[i]
+            elif intelcam:
+                p, s, im0 = path[i], '%g: ' % i, im0s
             else:
                 p, s, im0 = path, '', im0s
 
@@ -207,6 +222,8 @@ if __name__ == '__main__':
     parser.add_argument('--agnostic-nms', action='store_true', help='class-agnostic NMS')
     opt = parser.parse_args()
     print(opt)
+
+    rospy.init_node('ped_tracker', anonymous=True)
 
     with torch.no_grad():
         detect()
