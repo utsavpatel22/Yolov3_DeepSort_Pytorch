@@ -53,3 +53,7 @@ wget http://www.robots.ox.ac.uk/ActiveVision/Research/Projects/2009bbenfold_head
 
 For more detailed information about the algorithms and their corresponding lisences used in this project access their official github implementations.
 
+## Additional set up steps for Intel Realsense D435
+
+We are using Python 3, so to set up CV Bridge we need to
+
