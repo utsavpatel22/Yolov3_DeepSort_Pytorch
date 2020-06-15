@@ -1,2 +1,6 @@
 # output folder
 output/
+.ipy*
+deep_sort/__pycache__/*.pyc
+deep_sort/deep/__pycache__/*.pyc
+deep_sort/sort/__pycache__/*.pyc
