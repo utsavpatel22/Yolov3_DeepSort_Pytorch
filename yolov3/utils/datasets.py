@@ -213,7 +213,7 @@ class LoadIntelCam:  # for inference
 
         try:
             print("Getting image")
-            camera_rgb_image_raw = rospy.wait_for_message("/d400/color/image_raw", Image, timeout=5.0)
+            camera_rgb_image_raw = rospy.wait_for_message("/camera/color/image_raw", Image, timeout=5.0)
             print("Current /camera/color/image_raw READY=>")
 
         except:
