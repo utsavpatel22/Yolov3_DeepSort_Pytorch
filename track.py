@@ -10,7 +10,7 @@ from deep_sort import DeepSort
 import sys
 sys.path.append('/opt/ros/kinetic/lib/python2.7/dist-packages')
 import rospy
-from std_msgs.msg import Int16MultiArray
+from SocialDistancing.msg import BoxLocation, FloatArray
 sys.path.remove('/opt/ros/kinetic/lib/python2.7/dist-packages')
 
 deepsort = DeepSort("deep_sort/deep/checkpoint/ckpt.t7")
@@ -69,7 +69,7 @@ def detect(save_img=True):
     model = Darknet(opt.cfg, img_size)
 
     # Defining publisher object
-    ped_data_pub = rospy.Publisher("/pedestrian_data",Int16MultiArray, queue_size = 10)
+    ped_data_pub = rospy.Publisher("/pedestrian_data",BoxLocation, queue_size = 10)
 
     # Load weights
     attempt_download(weights)
@@ -170,11 +170,14 @@ def detect(save_img=True):
                     if len(outputs) > 0:
                         bbox_xyxy = outputs[:, :4]
                         identities = outputs[:, -1]
-                        ped_data = Int16MultiArray()
+                        ped_data = BoxLocation()
+                        single_ped_data = FloatArray()
                         start_p = time.time()
                         for l in range(bbox_xyxy.shape[0]):
-                        	ped_data.data = [identities[l], bbox_xyxy[l][0], bbox_xyxy[l][1], bbox_xyxy[l][2], bbox_xyxy[l][3]]
-                        	ped_data_pub.publish(ped_data)
+                        	single_ped_data.data = [identities[l], bbox_xyxy[l][0], bbox_xyxy[l][1], bbox_xyxy[l][2], bbox_xyxy[l][3]]
+                        	ped_data.detections.append(single_ped_data)
+                        	single_ped_data = FloatArray()
+                        ped_data_pub.publish(ped_data)
                         print("time taken to publish {}".format(time.time() - start_p))
                         
                         # print("The location of bounding boxes {}".format(bbox_xyxy))
