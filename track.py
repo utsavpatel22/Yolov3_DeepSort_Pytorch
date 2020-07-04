@@ -56,7 +56,7 @@ def draw_boxes(img, bbox, identities=None, offset=(0,0)):
 def detect(save_img=True):
     img_size = (320, 192) if ONNX_EXPORT else opt.img_size  # (320, 192) or (416, 256) or (608, 352) for (height, width)
     out, source, weights, half, view_img, save_txt = opt.output, opt.source, opt.weights, opt.half, opt.view_img, opt.save_txt
-    webcam = source == '0' or source.startswith('rtsp') or source.startswith('http') or source.endswith('.txt')
+    webcam = source == '0' or not (source == 'intelcam') or isinstance(source, int) or source.startswith('rtsp') or source.startswith('http') or source.endswith('.txt')
     intelcam = source == 'intelcam'
 
     # Initialize
