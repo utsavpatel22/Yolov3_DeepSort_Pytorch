@@ -172,13 +172,11 @@ def detect(save_img=True):
                         identities = outputs[:, -1]
                         ped_data = BoxLocation()
                         single_ped_data = FloatArray()
-                        start_p = time.time()
                         for l in range(bbox_xyxy.shape[0]):
                         	single_ped_data.data = [identities[l], bbox_xyxy[l][0], bbox_xyxy[l][1], bbox_xyxy[l][2], bbox_xyxy[l][3]]
                         	ped_data.detections.append(single_ped_data)
                         	single_ped_data = FloatArray()
                         ped_data_pub.publish(ped_data)
-                        print("time taken to publish {}".format(time.time() - start_p))
                         
                         # print("The location of bounding boxes {}".format(bbox_xyxy))
                         # print("The location of bounding boxes {}".format(bbox_xyxy[0][1]))
