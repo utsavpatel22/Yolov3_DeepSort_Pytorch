@@ -64,21 +64,22 @@ def undistort(img, cal_dir='cal_pickle.p'):
 
 def four_point_transform(image):
     # Change it with reorder function finally
-    rect = np.array([(383,375), (474,330), (494,427), (391,464)], dtype = "float32")
+    rect = np.array([(256, 115), (529, 90), (612, 286), (190, 305)], dtype = "float32")
     # rect = order_points(pts)
     (tl, tr, br, bl) = rect
     # print(tl, tr, br, bl)
-    scale = 4
+    scale = 2
     widthA = np.sqrt(((br[0] - bl[0]) ** 2) + ((br[1] - bl[1]) ** 2))
     widthB = np.sqrt(((tr[0] - tl[0]) ** 2) + ((tr[1] - tl[1]) ** 2))
     maxWidth = scale * max(int(widthA), int(widthB))
     heightA = np.sqrt(((tr[0] - br[0]) ** 2) + ((tr[1] - br[1]) ** 2))
     heightB = np.sqrt(((tl[0] - bl[0]) ** 2) + ((tl[1] - bl[1]) ** 2))
     maxHeight = scale * max(int(heightA), int(heightB))
-    dst = np.array([[0, 0], [maxWidth - 1, 0], [maxWidth - 1, maxHeight - 1], [0, maxHeight - 1]], dtype = "float32")
+    # dst = np.array([[0, 0], [maxWidth - 1, 0], [maxWidth - 1, maxHeight - 1], [0, maxHeight - 1]], dtype = "float32")
+    dst = np.array([(256, 90), (529, 90), (529, 363), (256, 363)], dtype = "float32")
     # compute the perspective transform matrix and then apply it
     M = cv2.getPerspectiveTransform(rect, dst)
-    warped = cv2.warpPerspective(image, M, (maxWidth, maxHeight))
+    warped = cv2.warpPerspective(image, M, (640, 480))
     # return the warped image
     return warped
 
@@ -201,6 +202,11 @@ def detect(save_img=True):
                     if len(outputs) > 0:
                         bbox_xyxy = outputs[:, :4]
                         identities = outputs[:, -1]
+                        ped_data = {}
+                        for l in range(bbox_xyxy.shape[0]):
+                        	ped_data[identities[l]] = [(bbox_xyxy[0][0] + bbox_xyxy[0][2]) / 2, bbox_xyxy[0][3]] # [x_center, max y]
+                        print("The ped dictionary {}".format(ped_data))
+                        cv2.circle(im0,(int(bbox_xyxy[0][0] + bbox_xyxy[0][2]/ 2), bbox_xyxy[0][3]), 15, (0,0,255), -1)
                         undistort_img = undistort(im0)
                         warped_img = four_point_transform(undistort_img)
                         cv2.imshow('warped_img',warped_img)
@@ -208,7 +214,7 @@ def detect(save_img=True):
                         # print("The location of bounding boxes {}".format(bbox_xyxy))
                         # print("The location of bounding boxes {}".format(bbox_xyxy[0][1]))
                         # print("The id {}".format(identities))
-                        draw_boxes(im0, bbox_xyxy, identities)
+                        # draw_boxes(im0, bbox_xyxy, identities)
                     #print('\n\n\t\ttracked objects')
                     #print(outputs)
 
@@ -217,7 +223,7 @@ def detect(save_img=True):
 
             # Stream results
             if view_img:
-                cv2.imshow(p, im0)
+                # cv2.imshow(p, im0)
                 if cv2.waitKey(1) == ord('q'):  # q to quit
                     raise StopIteration
 
