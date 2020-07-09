@@ -12,6 +12,9 @@ sys.path.append('/opt/ros/kinetic/lib/python2.7/dist-packages')
 import rospy
 from SocialDistancing.msg import BoxLocation, FloatArray
 sys.path.remove('/opt/ros/kinetic/lib/python2.7/dist-packages')
+import numpy as np
+from itertools import combinations
+import math
 
 deepsort = DeepSort("deep_sort/deep/checkpoint/ckpt.t7")
 palette = (2 ** 11 - 1, 2 ** 15 - 1, 2 ** 20 - 1)
@@ -62,7 +65,7 @@ def undistort(img, cal_dir='cal_pickle.p'):
     return dst
 
 
-def four_point_transform(image):
+def four_point_transform(image, ped_data):
     # Change it with reorder function finally
     rect = np.array([(256, 115), (529, 90), (612, 286), (190, 305)], dtype = "float32")
     # rect = order_points(pts)
@@ -80,8 +83,30 @@ def four_point_transform(image):
     # compute the perspective transform matrix and then apply it
     M = cv2.getPerspectiveTransform(rect, dst)
     warped = cv2.warpPerspective(image, M, (640, 480))
+
+    if (len(ped_data.keys()) >= 2):
+    	ped_combinations = list(combinations(ped_data.keys(),2))
+    	for k in range(len(ped_combinations)):
+    		point1 = np.matmul(M, ped_data[ped_combinations[k][0]])
+    		point2 = np.matmul(M, ped_data[ped_combinations[k][1]])
+    		point1[0] = point1[0]/ point1[2]
+    		point1[1] = point1[1]/ point1[2]
+
+    		point2[0] = point2[0]/ point2[2]
+    		point2[1] = point2[1]/ point2[2] 
+    		cv2.circle(warped,(int(point1[0]), int(point1[1])), 5, (255,0,255), -1)
+    		cv2.circle(warped,(int(point2[0]), int(point2[1])), 5, (255,0,255), -1)
+    		print("The points are {} ".format(ped_combinations[k][0]))
+    		print("The other point is {}".format(ped_combinations[k][1]))
+    		ped_distance = find_distance(point1, point2)
+    		print("The distance between ped-{} and ped-{} is {}".format(ped_combinations[k][0],ped_combinations[k][1], ped_distance))
     # return the warped image
     return warped
+
+def find_distance(point1, point2):
+	scale = 0.032
+	return (math.sqrt((point1[0] - point2[0])**2 + (point1[1] - point2[1])**2) * scale)
+
 
 
 
@@ -204,17 +229,19 @@ def detect(save_img=True):
                         identities = outputs[:, -1]
                         ped_data = {}
                         for l in range(bbox_xyxy.shape[0]):
-                        	ped_data[identities[l]] = [(bbox_xyxy[0][0] + bbox_xyxy[0][2]) / 2, bbox_xyxy[0][3]] # [x_center, max y]
-                        print("The ped dictionary {}".format(ped_data))
-                        cv2.circle(im0,(int(bbox_xyxy[0][0] + bbox_xyxy[0][2]/ 2), bbox_xyxy[0][3]), 15, (0,0,255), -1)
+                        	tmp_array = np.expand_dims(np.asarray([(bbox_xyxy[l][0] + bbox_xyxy[l][2]) / 2, bbox_xyxy[l][3], 1]), axis=1) # [x_center, max y, 1]
+                        	cv2.circle(im0,(int((bbox_xyxy[l][0] + bbox_xyxy[l][2]) / 2), int(bbox_xyxy[l][3])), 5, (0,0,255), -1)
+                        	ped_data[identities[l]] =  tmp_array
+                        # print("The ped dictionary {}".format(ped_data))
+                        
                         undistort_img = undistort(im0)
-                        warped_img = four_point_transform(undistort_img)
+                        warped_img = four_point_transform(undistort_img, ped_data)
                         cv2.imshow('warped_img',warped_img)
                         
                         # print("The location of bounding boxes {}".format(bbox_xyxy))
                         # print("The location of bounding boxes {}".format(bbox_xyxy[0][1]))
                         # print("The id {}".format(identities))
-                        # draw_boxes(im0, bbox_xyxy, identities)
+                        draw_boxes(im0, bbox_xyxy, identities)
                     #print('\n\n\t\ttracked objects')
                     #print(outputs)
 
@@ -223,7 +250,7 @@ def detect(save_img=True):
 
             # Stream results
             if view_img:
-                # cv2.imshow(p, im0)
+                cv2.imshow(p, im0)
                 if cv2.waitKey(1) == ord('q'):  # q to quit
                     raise StopIteration
 
