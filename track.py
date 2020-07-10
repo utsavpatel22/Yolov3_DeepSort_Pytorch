@@ -184,6 +184,9 @@ def detect(save_img=True):
                         draw_boxes(im0, bbox_xyxy, identities)
                     #print('\n\n\t\ttracked objects')
                     #print(outputs)
+            else:
+                ped_data = BoxLocation()
+                ped_data_pub.publish(ped_data)
 
             # Print time (inference + NMS)
             print('%sDone. (%.3fs)' % (s, time.time() - t))
