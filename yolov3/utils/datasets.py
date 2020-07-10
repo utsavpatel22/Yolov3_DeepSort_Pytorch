@@ -19,7 +19,7 @@ from yolov3.utils.utils import xyxy2xywh, xywh2xyxy
 import sys
 sys.path.append('/opt/ros/kinetic/lib/python2.7/dist-packages')
 import rospy
-from sensor_msgs.msg import Image
+from sensor_msgs.msg import Image, CompressedImage
 from cv_bridge import CvBridge, CvBridgeError
 sys.path.remove('/opt/ros/kinetic/lib/python2.7/dist-packages')
 
@@ -126,6 +126,8 @@ class LoadImages:  # for inference
         return self.nF  # number of files
 
 
+
+
 class LoadWebcam:  # for inference
     def __init__(self, pipe=0, img_size=416, half=False):
         self.img_size = img_size
@@ -223,6 +225,51 @@ class LoadIntelCam:  # for inference
            img0 = self.bridge.imgmsg_to_cv2(camera_rgb_image_raw, "bgr8")
         except CvBridgeError as e:
            print(e)
+
+        # Print
+        img_path = 'Intelcam.jpg'
+        print('Intel cam %g: ' % self.count, end='')
+
+        # Padded resize
+        img = letterbox(img0, new_shape=self.img_size)[0]
+
+        # Convert
+        img = img[:, :, ::-1].transpose(2, 0, 1)  # BGR to RGB, to 3x416x416
+        img = np.ascontiguousarray(img, dtype=np.float16 if self.half else np.float32)  # uint8 to fp16/fp32
+        img /= 255.0  # 0 - 255 to 0.0 - 1.0
+
+        return img_path, img, img0, None
+
+    def __len__(self):
+        return 0
+
+class LoadIntelCamCompressed:  # for inference
+    def __init__(self, img_size=416, half=False):
+        self.img_size = img_size
+        self.half = half  # half precision fp16 images
+        self.bridge = CvBridge()
+
+    def __iter__(self):
+        self.count = -1
+        return self
+
+    def __next__(self):
+        self.count += 1
+        # Read frame
+        # if self.pipe == 0:  # local camera
+        #     ret_val, img0 = self.cap.read()
+        #     img0 = cv2.flip(img0, 1)  # flip left-right
+
+        try:
+            print("Getting image")
+            camera_rgb_image_raw = rospy.wait_for_message("/camera/color/image_raw/compressed", CompressedImage, timeout=5.0)
+            print("Current /camera/color/image_raw/compressed READY=>")
+
+        except:
+            print("Current /camera/color/image_raw/compressed not ready yet, retrying for getting camera_rgb_image_raw")
+
+        np_arr = np.fromstring(camera_rgb_image_raw.data, np.uint8)
+        img0 = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
 
         # Print
         img_path = 'Intelcam.jpg'

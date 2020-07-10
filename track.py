@@ -56,8 +56,10 @@ def draw_boxes(img, bbox, identities=None, offset=(0,0)):
 def detect(save_img=True):
     img_size = (320, 192) if ONNX_EXPORT else opt.img_size  # (320, 192) or (416, 256) or (608, 352) for (height, width)
     out, source, weights, half, view_img, save_txt = opt.output, opt.source, opt.weights, opt.half, opt.view_img, opt.save_txt
-    webcam = source == '0' or not (source == 'intelcam') or isinstance(source, int) or source.startswith('rtsp') or source.startswith('http') or source.endswith('.txt')
+    webcam = source == '0' or (not (source == 'intelcam') and not (source == 'compressed')) or isinstance(source, int) or source.startswith('rtsp') or source.startswith('http') or source.endswith('.txt')
+    print(webcam)
     intelcam = source == 'intelcam'
+    intelcamCompressed = source == 'compressed'
 
     # Initialize
     device = torch_utils.select_device(device='cpu' if ONNX_EXPORT else opt.device)
@@ -100,6 +102,12 @@ def detect(save_img=True):
         torch.backends.cudnn.benchmark = True  # set True to speed up constant image size inference
         dataset = LoadIntelCam(img_size=img_size, half=half)
 
+    elif intelcamCompressed:
+        save_img = False
+        view_img = True
+        torch.backends.cudnn.benchmark = True  # set True to speed up constant image size inference
+        dataset = LoadIntelCamCompressed(img_size=img_size, half=half)
+
     else:
         save_img = True
         dataset = LoadImages(source, img_size=img_size, half=half)
@@ -130,6 +138,8 @@ def detect(save_img=True):
             if webcam:  # batch_size >= 1
                 p, s, im0 = path[i], '%g: ' % i, im0s[i]
             elif intelcam:
+                p, s, im0 = path[i], '%g: ' % i, im0s
+            elif intelcamCompressed:
                 p, s, im0 = path[i], '%g: ' % i, im0s
             else:
                 p, s, im0 = path, '', im0s
