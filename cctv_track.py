@@ -89,9 +89,29 @@ class homography():
 	    M = cv2.getPerspectiveTransform(rect, dst)
 	    warped = cv2.warpPerspective(image, M, (640, 480))
 
-	    if (len(ped_data.keys()) >= 2):
-	    	ped_combinations = list(combinations(ped_data.keys(),2))
-	    	for k in range(len(ped_combinations)):
+	    # if (len(ped_data.keys()) >= 2):
+	    # 	ped_combinations = list(combinations(ped_data.keys(),2))
+	    	# for k in range(len(ped_combinations)):
+	    	# 	point1 = np.matmul(M, ped_data[ped_combinations[k][0]])
+	    	# 	point2 = np.matmul(M, ped_data[ped_combinations[k][1]])
+	    	# 	point1[0] = point1[0]/ point1[2]
+	    	# 	point1[1] = point1[1]/ point1[2]
+
+	    	# 	point2[0] = point2[0]/ point2[2]
+	    	# 	point2[1] = point2[1]/ point2[2] 
+	    	# 	cv2.circle(warped,(int(point1[0]), int(point1[1])), 5, (255,0,255), -1)
+	    	# 	cv2.circle(warped,(int(point2[0]), int(point2[1])), 5, (255,0,255), -1)
+	    	# 	print("The points are {} ".format(ped_combinations[k][0]))
+	    	# 	print("The other point is {}".format(ped_combinations[k][1]))
+	    	# 	ped_distance = self.find_distance(point1, point2)
+	    	# 	print("The distance between ped-{} and ped-{} is {}".format(ped_combinations[k][0],ped_combinations[k][1], ped_distance))
+	    # return the warped image
+
+	    list_set = []
+	    if (len(ped_data.keys()) > 1):
+		    ped_combinations = list(combinations(ped_data.keys(),2))
+		    non_compliant_ped = []
+		    for k in range(len(ped_combinations)):
 	    		point1 = np.matmul(M, ped_data[ped_combinations[k][0]])
 	    		point2 = np.matmul(M, ped_data[ped_combinations[k][1]])
 	    		point1[0] = point1[0]/ point1[2]
@@ -101,11 +121,78 @@ class homography():
 	    		point2[1] = point2[1]/ point2[2] 
 	    		cv2.circle(warped,(int(point1[0]), int(point1[1])), 5, (255,0,255), -1)
 	    		cv2.circle(warped,(int(point2[0]), int(point2[1])), 5, (255,0,255), -1)
-	    		print("The points are {} ".format(ped_combinations[k][0]))
-	    		print("The other point is {}".format(ped_combinations[k][1]))
+	    		# print("The points are {} ".format(ped_combinations[k][0]))
+	    		# print("The other point is {}".format(ped_combinations[k][1]))
 	    		ped_distance = self.find_distance(point1, point2)
 	    		print("The distance between ped-{} and ped-{} is {}".format(ped_combinations[k][0],ped_combinations[k][1], ped_distance))
-	    # return the warped image
+
+		    	if(ped_distance < 6):
+			    	non_compliant_ped.append(ped_combinations[k])
+
+		    if(len(non_compliant_ped) > 0):
+		    	list_set.append(set(non_compliant_ped[0]))
+		    	for i in range(1, len(non_compliant_ped)):
+		    		count = 0
+		    		for j in range(0, len(list_set)):
+		    			int_len = len(list_set[j].intersection(non_compliant_ped[i]))
+		    			if(int_len > 0):
+		    				list_set[j] = list_set[j].union(set(non_compliant_ped[i]))
+		    			else:
+		    				count += 1
+		    		if(count == len(list_set)):
+		    			list_set.append(set(non_compliant_ped[i]))
+
+		    print("The groups {}".format(list_set))
+		    if (len(list_set) > 0):
+		    	largest_grp = max(list_set, key=len)
+		    	print("The largest group is {}".format(largest_grp))
+		    	min_cent_dist = image.shape[0]
+		    	min_dist_identity = -1
+		    	for identity in largest_grp:
+		    		tmp_cent_dist = abs((image.shape[1]/2) - ped_data[identity][0])
+		    		print("The image width {}".format(image.shape[1]))
+		    		print("The center point {} for identity {}".format(ped_data[identity][0], identity))
+		    		if(tmp_cent_dist < min_cent_dist):
+		    			min_cent_dist = tmp_cent_dist
+		    			min_dist_identity = identity
+		    	print("The min distance identity {}".format(min_dist_identity))
+				# 			self.locked_identity = min_dist_identity
+				# 			self.reached = False
+							
+
+				# 	r_theta = Twist()
+				# 	r_theta.linear.x = self.ped_data_dict[min_dist_identity][2] / 1000
+				# 	r_theta.linear.y = self.ped_data_dict[min_dist_identity][3] * (3.14/180)
+				# 	self.r_theta_pub.publish(r_theta)
+				# 	if (self.ped_data_dict[self.locked_identity][2] < 1000):
+				# 		self.reached = True
+
+		    # elif (len(list_set) == 0) and not self.reached and (list(self.ped_data_dict.keys()).count(self.locked_identity) != 0):
+			# 	r_theta = Twist()
+			# 	r_theta.linear.x = self.ped_data_dict[self.locked_identity][2] / 1000
+			# 	r_theta.linear.y = self.ped_data_dict[self.locked_identity][3] * (3.14/180)
+			# 	self.r_theta_pub.publish(r_theta)
+
+			# 	if (self.ped_data_dict[self.locked_identity][2] < 1000):
+			# 		self.reached = True
+			# else:
+			# 	r_theta = Twist()
+			# 	r_theta.linear.x = 0
+			# 	r_theta.linear.y = 0
+			# 	self.r_theta_pub.publish(r_theta)
+			# 	self.locked_identity = -1
+			# 	self.reached = False
+
+
+		# else:
+		# 	r_theta = Twist()
+		# 	r_theta.linear.x = 0
+		# 	r_theta.linear.y = 0
+		# 	self.r_theta_pub.publish(r_theta)
+		# 	self.locked_identity = -1
+		# 	self.reached = False
+		# self.ped_data_dict = {}
+
 	    return warped
 
 	def find_distance(self, point1, point2):
