@@ -54,58 +54,63 @@ def draw_boxes(img, bbox, identities=None, offset=(0,0)):
         cv2.putText(img, label, (x1, y1 + t_size[1] + 4), cv2.FONT_HERSHEY_PLAIN, 2, [255, 255, 255], 2)
     return img
 
-def undistort(img, cal_dir='cal_pickle.p'):
-    #cv2.imwrite('camera_cal/test_cal.jpg', dst)
-    with open(cal_dir, mode='rb') as f:
-        file = pickle.load(f)
-    mtx = file['mtx']
-    dist = file['dist']
-    dst = cv2.undistort(img, mtx, dist, None, mtx)
 
-    return dst
+class homography():
+
+	def undistort(self, img, cal_dir='cal_pickle.p'):
+	    #cv2.imwrite('camera_cal/test_cal.jpg', dst)
+	    with open(cal_dir, mode='rb') as f:
+	        file = pickle.load(f)
+	    mtx = file['mtx']
+	    dist = file['dist']
+	    dst = cv2.undistort(img, mtx, dist, None, mtx)
+
+	    return dst
 
 
-def four_point_transform(image, ped_data):
-    # Change it with reorder function finally
-    rect = np.array([(256, 115), (529, 90), (612, 286), (190, 305)], dtype = "float32")
-    # rect = order_points(pts)
-    (tl, tr, br, bl) = rect
-    # print(tl, tr, br, bl)
-    scale = 2
-    widthA = np.sqrt(((br[0] - bl[0]) ** 2) + ((br[1] - bl[1]) ** 2))
-    widthB = np.sqrt(((tr[0] - tl[0]) ** 2) + ((tr[1] - tl[1]) ** 2))
-    maxWidth = scale * max(int(widthA), int(widthB))
-    heightA = np.sqrt(((tr[0] - br[0]) ** 2) + ((tr[1] - br[1]) ** 2))
-    heightB = np.sqrt(((tl[0] - bl[0]) ** 2) + ((tl[1] - bl[1]) ** 2))
-    maxHeight = scale * max(int(heightA), int(heightB))
-    # dst = np.array([[0, 0], [maxWidth - 1, 0], [maxWidth - 1, maxHeight - 1], [0, maxHeight - 1]], dtype = "float32")
-    dst = np.array([(256, 90), (529, 90), (529, 363), (256, 363)], dtype = "float32")
-    # compute the perspective transform matrix and then apply it
-    M = cv2.getPerspectiveTransform(rect, dst)
-    warped = cv2.warpPerspective(image, M, (640, 480))
+	def four_point_transform(self, image, ped_data):
+	    # Change it with reorder function finally
+	    # rect = np.array([(256, 115), (529, 90), (612, 286), (190, 305)], dtype = "float32")
+	    rect = np.array([(152, 85), (433, 85), (598, 378), (38, 418)], dtype = "float32")
+	    # rect = order_points(pts)
+	    (tl, tr, br, bl) = rect
+	    # print(tl, tr, br, bl)
+	    scale = 2
+	    widthA = np.sqrt(((br[0] - bl[0]) ** 2) + ((br[1] - bl[1]) ** 2))
+	    widthB = np.sqrt(((tr[0] - tl[0]) ** 2) + ((tr[1] - tl[1]) ** 2))
+	    maxWidth = scale * max(int(widthA), int(widthB))
+	    heightA = np.sqrt(((tr[0] - br[0]) ** 2) + ((tr[1] - br[1]) ** 2))
+	    heightB = np.sqrt(((tl[0] - bl[0]) ** 2) + ((tl[1] - bl[1]) ** 2))
+	    maxHeight = scale * max(int(heightA), int(heightB))
+	    # dst = np.array([[0, 0], [maxWidth - 1, 0], [maxWidth - 1, maxHeight - 1], [0, maxHeight - 1]], dtype = "float32")
+	    dst = np.array([(37, 63), (337, 63), (337, 460), (37, 460)], dtype = "float32")
+	    
+	    # compute the perspective transform matrix and then apply it
+	    M = cv2.getPerspectiveTransform(rect, dst)
+	    warped = cv2.warpPerspective(image, M, (640, 480))
 
-    if (len(ped_data.keys()) >= 2):
-    	ped_combinations = list(combinations(ped_data.keys(),2))
-    	for k in range(len(ped_combinations)):
-    		point1 = np.matmul(M, ped_data[ped_combinations[k][0]])
-    		point2 = np.matmul(M, ped_data[ped_combinations[k][1]])
-    		point1[0] = point1[0]/ point1[2]
-    		point1[1] = point1[1]/ point1[2]
+	    if (len(ped_data.keys()) >= 2):
+	    	ped_combinations = list(combinations(ped_data.keys(),2))
+	    	for k in range(len(ped_combinations)):
+	    		point1 = np.matmul(M, ped_data[ped_combinations[k][0]])
+	    		point2 = np.matmul(M, ped_data[ped_combinations[k][1]])
+	    		point1[0] = point1[0]/ point1[2]
+	    		point1[1] = point1[1]/ point1[2]
 
-    		point2[0] = point2[0]/ point2[2]
-    		point2[1] = point2[1]/ point2[2] 
-    		cv2.circle(warped,(int(point1[0]), int(point1[1])), 5, (255,0,255), -1)
-    		cv2.circle(warped,(int(point2[0]), int(point2[1])), 5, (255,0,255), -1)
-    		print("The points are {} ".format(ped_combinations[k][0]))
-    		print("The other point is {}".format(ped_combinations[k][1]))
-    		ped_distance = find_distance(point1, point2)
-    		print("The distance between ped-{} and ped-{} is {}".format(ped_combinations[k][0],ped_combinations[k][1], ped_distance))
-    # return the warped image
-    return warped
+	    		point2[0] = point2[0]/ point2[2]
+	    		point2[1] = point2[1]/ point2[2] 
+	    		cv2.circle(warped,(int(point1[0]), int(point1[1])), 5, (255,0,255), -1)
+	    		cv2.circle(warped,(int(point2[0]), int(point2[1])), 5, (255,0,255), -1)
+	    		print("The points are {} ".format(ped_combinations[k][0]))
+	    		print("The other point is {}".format(ped_combinations[k][1]))
+	    		ped_distance = self.find_distance(point1, point2)
+	    		print("The distance between ped-{} and ped-{} is {}".format(ped_combinations[k][0],ped_combinations[k][1], ped_distance))
+	    # return the warped image
+	    return warped
 
-def find_distance(point1, point2):
-	scale = 0.032
-	return (math.sqrt((point1[0] - point2[0])**2 + (point1[1] - point2[1])**2) * scale)
+	def find_distance(self, point1, point2):
+		scale = 0.032
+		return (math.sqrt((point1[0] - point2[0])**2 + (point1[1] - point2[1])**2) * scale)
 
 
 
@@ -233,9 +238,10 @@ def detect(save_img=True):
                         	cv2.circle(im0,(int((bbox_xyxy[l][0] + bbox_xyxy[l][2]) / 2), int(bbox_xyxy[l][3])), 5, (0,0,255), -1)
                         	ped_data[identities[l]] =  tmp_array
                         # print("The ped dictionary {}".format(ped_data))
-                        
-                        undistort_img = undistort(im0)
-                        warped_img = four_point_transform(undistort_img, ped_data)
+                        hg_obj = homography()
+                        undistort_img = hg_obj.undistort(im0)
+                        warped_img = hg_obj.four_point_transform(undistort_img, ped_data)
+                        cv2.imshow('Undistort_img',undistort_img)
                         cv2.imshow('warped_img',warped_img)
                         
                         # print("The location of bounding boxes {}".format(bbox_xyxy))
