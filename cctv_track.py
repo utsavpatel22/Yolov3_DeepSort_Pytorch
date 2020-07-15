@@ -10,11 +10,13 @@ import pickle
 import sys
 sys.path.append('/opt/ros/kinetic/lib/python2.7/dist-packages')
 import rospy
+from geometry_msgs.msg import PoseWithCovarianceStamped, Twist
 from SocialDistancing.msg import BoxLocation, FloatArray
 sys.path.remove('/opt/ros/kinetic/lib/python2.7/dist-packages')
 import numpy as np
 from itertools import combinations
 import math
+from squaternion import Quaternion
 
 deepsort = DeepSort("deep_sort/deep/checkpoint/ckpt.t7")
 palette = (2 ** 11 - 1, 2 ** 15 - 1, 2 ** 20 - 1)
@@ -54,8 +56,29 @@ def draw_boxes(img, bbox, identities=None, offset=(0,0)):
         cv2.putText(img, label, (x1, y1 + t_size[1] + 4), cv2.FONT_HERSHEY_PLAIN, 2, [255, 255, 255], 2)
     return img
 
+class Turtlebotgoal():
+	def __init__(self):
+		self.pose_subscriber = rospy.Subscriber("/amcl_pose", PoseWithCovarianceStamped, self.robot_pose_cb)
+		self.robot_x = 0
+		self.robot_y = 0
+		self.robot_th = 0
 
-class homography():
+	def robot_pose_cb(self, data):
+		self.robot_x = data.pose.pose.position.x
+		self.robot_y = data.pose.pose.position.y
+		q = Quaternion(data.pose.pose.orientation.w, data.pose.pose.orientation.x, data.pose.pose.orientation.y, data.pose.pose.orientation.z)
+		self.robot_th = q.to_euler(degrees=False)[2]
+
+
+
+class Homography():
+	def __init__(self):
+		self.locked_identity = -1
+		self.reached = True
+		self.fixed_point = np.array([37, 460])
+		self.offset_angle = 1.414
+		self.ground_origin = np.array([-4.2, 1.86])
+		self.r_theta_pub = rospy.Publisher("/target/position",Twist, queue_size = 10)
 
 	def undistort(self, img, cal_dir='cal_pickle.p'):
 	    #cv2.imwrite('camera_cal/test_cal.jpg', dst)
@@ -68,7 +91,7 @@ class homography():
 	    return dst
 
 
-	def four_point_transform(self, image, ped_data):
+	def four_point_transform(self, image, ped_data, tb_pose_obj):
 	    # Change it with reorder function finally
 	    # rect = np.array([(256, 115), (529, 90), (612, 286), (190, 305)], dtype = "float32")
 	    rect = np.array([(152, 85), (433, 85), (598, 378), (38, 418)], dtype = "float32")
@@ -119,14 +142,14 @@ class homography():
 
 	    		point2[0] = point2[0]/ point2[2]
 	    		point2[1] = point2[1]/ point2[2] 
-	    		cv2.circle(warped,(int(point1[0]), int(point1[1])), 5, (255,0,255), -1)
-	    		cv2.circle(warped,(int(point2[0]), int(point2[1])), 5, (255,0,255), -1)
+	    		# cv2.circle(warped,(int(point1[0]), int(point1[1])), 5, (255,0,255), -1)
+	    		# cv2.circle(warped,(int(point2[0]), int(point2[1])), 5, (255,0,255), -1)
 	    		# print("The points are {} ".format(ped_combinations[k][0]))
 	    		# print("The other point is {}".format(ped_combinations[k][1]))
 	    		ped_distance = self.find_distance(point1, point2)
-	    		print("The distance between ped-{} and ped-{} is {}".format(ped_combinations[k][0],ped_combinations[k][1], ped_distance))
+	    		# print("The distance between ped-{} and ped-{} is {}".format(ped_combinations[k][0],ped_combinations[k][1], ped_distance))
 
-		    	if(ped_distance < 6):
+		    	if(ped_distance < 2):
 			    	non_compliant_ped.append(ped_combinations[k])
 
 		    if(len(non_compliant_ped) > 0):
@@ -142,30 +165,82 @@ class homography():
 		    		if(count == len(list_set)):
 		    			list_set.append(set(non_compliant_ped[i]))
 
-		    print("The groups {}".format(list_set))
+		    # print("The groups {}".format(list_set))
 		    if (len(list_set) > 0):
 		    	largest_grp = max(list_set, key=len)
-		    	print("The largest group is {}".format(largest_grp))
+		    	# print("The largest group is {}".format(largest_grp))
 		    	min_cent_dist = image.shape[0]
 		    	min_dist_identity = -1
 		    	for identity in largest_grp:
 		    		tmp_cent_dist = abs((image.shape[1]/2) - ped_data[identity][0])
-		    		print("The image width {}".format(image.shape[1]))
-		    		print("The center point {} for identity {}".format(ped_data[identity][0], identity))
+		    		# print("The image width {}".format(image.shape[1]))
+		    		# print("The center point {} for identity {}".format(ped_data[identity][0], identity))
 		    		if(tmp_cent_dist < min_cent_dist):
 		    			min_cent_dist = tmp_cent_dist
 		    			min_dist_identity = identity
-		    	print("The min distance identity {}".format(min_dist_identity))
-				# 			self.locked_identity = min_dist_identity
-				# 			self.reached = False
-							
+		    			self.locked_identity = min_dist_identity
+		    			self.reached = False
 
-				# 	r_theta = Twist()
-				# 	r_theta.linear.x = self.ped_data_dict[min_dist_identity][2] / 1000
-				# 	r_theta.linear.y = self.ped_data_dict[min_dist_identity][3] * (3.14/180)
-				# 	self.r_theta_pub.publish(r_theta)
-				# 	if (self.ped_data_dict[self.locked_identity][2] < 1000):
-				# 		self.reached = True
+		    	point_ground_norm = np.matmul(M, ped_data[self.locked_identity])
+		    	point_ground_norm[0] = point_ground_norm[0] / point_ground_norm[2]
+		    	point_ground_norm[1] = point_ground_norm[1] / point_ground_norm[2]
+
+		    	r_ground = self.find_distance(self.fixed_point, point_ground_norm) 
+		    	cv2.circle(warped,(int(point_ground_norm[0]), int(point_ground_norm[1])), 5, (255,0,255), -1)
+		    	theta_ground = -1 * np.arctan([(point_ground_norm[1]-self.fixed_point[1]) / (point_ground_norm[0]-self.fixed_point[0])])
+		    	theta_map = theta_ground - self.offset_angle
+
+		    	x_map = self.ground_origin[0] + r_ground * math.cos(theta_map)
+		    	y_map = self.ground_origin[1] + r_ground * math.sin(theta_map)
+		    	# print("The locked identity data {}".format(ped_data[self.locked_identity]))
+		    	# print("The locked identity is {}".format(self.locked_identity))
+		    	# print("The theta ground {}".format(theta_ground * (180/np.pi)))
+		    	# print("The current turtlebot pose {} -- {} -- {}".format(tb_pose_obj.robot_x, tb_pose_obj.robot_y, tb_pose_obj.robot_th))
+		    	# print("The x_map and y_map {} --- {}".format(x_map, y_map))
+
+		    	r_robot = (math.sqrt((x_map - tb_pose_obj.robot_x)**2 + (y_map - tb_pose_obj.robot_y)**2))
+		    	ang_uncorrected = np.arctan([(y_map - tb_pose_obj.robot_y) / (x_map - tb_pose_obj.robot_x)])
+		    	# print("The robot relative angle is {}".format(robot_rel_ang * (180/np.pi)))
+
+		    	# Translating the map axis to the robot
+		    	x_shift_robot = x_map - tb_pose_obj.robot_x
+		    	y_shift_robot = y_map - tb_pose_obj.robot_y
+
+		    	if x_shift_robot > 0:
+		    		ang_corrected = ang_uncorrected
+
+		    	elif x_shift_robot < 0:
+		    		if y_shift_robot > 0: # 2nd co
+		    			ang_corrected = ang_uncorrected + np.pi
+		    		elif y_shift_robot < 0: # 3rd co
+		    			ang_corrected = ang_uncorrected - np.pi
+
+		    	theta_rotate = ang_corrected - tb_pose_obj.robot_th
+		    	print("theta rotate {}".format(theta_rotate * (180/np.pi)))
+
+		    	# print("Theta_robot before if condition {}".format(theta_robot * (180/np.pi)))
+		    	if (theta_rotate > np.pi):
+		    		theta_rotate = theta_rotate - (2*np.pi) 
+		    	elif (theta_rotate < -np.pi):
+		    		theta_rotate = theta_rotate + (2*np.pi)
+		    	print("theta rotate after pi correction {}".format(theta_rotate * (180/np.pi)))
+		    	# print("The robot distance {} and angle {}".format(r_robot, theta_robot*(180/np.pi)))
+		    	
+		    	if (r_robot < 1):
+		    		self.reached = True
+		    		# print("The reached status {}".format(self.reached))
+
+		    	if (self.reached == False):
+		    		r_theta_obj = Twist()
+		    		r_theta_obj.linear.x = r_robot
+		    		r_theta_obj.linear.y = -theta_rotate
+		    		self.r_theta_pub.publish(r_theta_obj)
+
+		    	else:
+		    		r_theta_obj = Twist()
+		    		r_theta_obj.linear.x = 0
+		    		r_theta_obj.linear.y = 0
+		    		self.r_theta_pub.publish(r_theta_obj)
 
 		    # elif (len(list_set) == 0) and not self.reached and (list(self.ped_data_dict.keys()).count(self.locked_identity) != 0):
 			# 	r_theta = Twist()
@@ -184,19 +259,19 @@ class homography():
 			# 	self.reached = False
 
 
-		# else:
-		# 	r_theta = Twist()
-		# 	r_theta.linear.x = 0
-		# 	r_theta.linear.y = 0
-		# 	self.r_theta_pub.publish(r_theta)
-		# 	self.locked_identity = -1
-		# 	self.reached = False
+		    else:
+		    	r_theta = Twist()
+		    	r_theta.linear.x = 0
+		    	r_theta.linear.y = 0
+		    	self.r_theta_pub.publish(r_theta)
+		    	self.locked_identity = -1
+	    print("Reached status {}".format(self.reached))
 		# self.ped_data_dict = {}
 
 	    return warped
 
 	def find_distance(self, point1, point2):
-		scale = 0.032
+		scale = 0.00963
 		return (math.sqrt((point1[0] - point2[0])**2 + (point1[1] - point2[1])**2) * scale)
 
 
@@ -259,6 +334,8 @@ def detect(save_img=True):
 
     # Run inference
     t0 = time.time()
+
+    tb_pose_obj = Turtlebotgoal()
     for path, img, im0s, vid_cap in dataset:
         t = time.time()
 
@@ -322,12 +399,12 @@ def detect(save_img=True):
                         ped_data = {}
                         for l in range(bbox_xyxy.shape[0]):
                         	tmp_array = np.expand_dims(np.asarray([(bbox_xyxy[l][0] + bbox_xyxy[l][2]) / 2, bbox_xyxy[l][3], 1]), axis=1) # [x_center, max y, 1]
-                        	cv2.circle(im0,(int((bbox_xyxy[l][0] + bbox_xyxy[l][2]) / 2), int(bbox_xyxy[l][3])), 5, (0,0,255), -1)
+                        	# cv2.circle(im0,(int((bbox_xyxy[l][0] + bbox_xyxy[l][2]) / 2), int(bbox_xyxy[l][3])), 5, (0,0,255), -1)
                         	ped_data[identities[l]] =  tmp_array
                         # print("The ped dictionary {}".format(ped_data))
-                        hg_obj = homography()
+                        hg_obj = Homography()
                         undistort_img = hg_obj.undistort(im0)
-                        warped_img = hg_obj.four_point_transform(undistort_img, ped_data)
+                        warped_img = hg_obj.four_point_transform(undistort_img, ped_data, tb_pose_obj)
                         cv2.imshow('Undistort_img',undistort_img)
                         cv2.imshow('warped_img',warped_img)
                         
