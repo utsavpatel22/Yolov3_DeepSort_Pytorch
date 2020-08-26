@@ -17,6 +17,7 @@ import numpy as np
 from itertools import combinations
 import math
 from squaternion import Quaternion
+import json
 
 deepsort = DeepSort("deep_sort/deep/checkpoint/ckpt.t7")
 palette = (2 ** 11 - 1, 2 ** 15 - 1, 2 ** 20 - 1)
@@ -94,7 +95,8 @@ class Homography():
 	def four_point_transform(self, image, ped_data, tb_pose_obj):
 	    # Change it with reorder function finally
 	    # rect = np.array([(256, 115), (529, 90), (612, 286), (190, 305)], dtype = "float32")
-	    rect = np.array([(152, 85), (433, 85), (598, 378), (38, 418)], dtype = "float32")
+	    rect = np.array([(209, 39), (478, 54), (592, 337), (104, 331)], dtype = "float32")
+        # rect = np.array([(209, 39), (478, 54), (592, 337), (104, 331)], dtype = "float32")
 	    # rect = order_points(pts)
 	    (tl, tr, br, bl) = rect
 	    # print(tl, tr, br, bl)
@@ -107,6 +109,8 @@ class Homography():
 	    maxHeight = scale * max(int(heightA), int(heightB))
 	    # dst = np.array([[0, 0], [maxWidth - 1, 0], [maxWidth - 1, maxHeight - 1], [0, maxHeight - 1]], dtype = "float32")
 	    dst = np.array([(37, 63), (337, 63), (337, 460), (37, 460)], dtype = "float32")
+	    fixed_origin = np.array([27, 469])
+	    fixed_point2 = np.array([358, 472])
 	    
 	    # compute the perspective transform matrix and then apply it
 	    M = cv2.getPerspectiveTransform(rect, dst)
@@ -128,147 +132,33 @@ class Homography():
 	    	# 	print("The other point is {}".format(ped_combinations[k][1]))
 	    	# 	ped_distance = self.find_distance(point1, point2)
 	    	# 	print("The distance between ped-{} and ped-{} is {}".format(ped_combinations[k][0],ped_combinations[k][1], ped_distance))
-	    # return the warped image
-
-	    list_set = []
-	    if (len(ped_data.keys()) > 1):
-		    ped_combinations = list(combinations(ped_data.keys(),2))
-		    non_compliant_ped = []
-		    for k in range(len(ped_combinations)):
-	    		point1 = np.matmul(M, ped_data[ped_combinations[k][0]])
-	    		point2 = np.matmul(M, ped_data[ped_combinations[k][1]])
-	    		point1[0] = point1[0]/ point1[2]
-	    		point1[1] = point1[1]/ point1[2]
-
-	    		point2[0] = point2[0]/ point2[2]
-	    		point2[1] = point2[1]/ point2[2] 
-	    		# cv2.circle(warped,(int(point1[0]), int(point1[1])), 5, (255,0,255), -1)
-	    		# cv2.circle(warped,(int(point2[0]), int(point2[1])), 5, (255,0,255), -1)
-	    		# print("The points are {} ".format(ped_combinations[k][0]))
-	    		# print("The other point is {}".format(ped_combinations[k][1]))
-	    		ped_distance = self.find_distance(point1, point2)
-	    		# print("The distance between ped-{} and ped-{} is {}".format(ped_combinations[k][0],ped_combinations[k][1], ped_distance))
-
-		    	if(ped_distance < 2):
-			    	non_compliant_ped.append(ped_combinations[k])
-
-		    if(len(non_compliant_ped) > 0):
-		    	list_set.append(set(non_compliant_ped[0]))
-		    	for i in range(1, len(non_compliant_ped)):
-		    		count = 0
-		    		for j in range(0, len(list_set)):
-		    			int_len = len(list_set[j].intersection(non_compliant_ped[i]))
-		    			if(int_len > 0):
-		    				list_set[j] = list_set[j].union(set(non_compliant_ped[i]))
-		    			else:
-		    				count += 1
-		    		if(count == len(list_set)):
-		    			list_set.append(set(non_compliant_ped[i]))
-
-		    # print("The groups {}".format(list_set))
-		    if (len(list_set) > 0):
-		    	largest_grp = max(list_set, key=len)
-		    	# print("The largest group is {}".format(largest_grp))
-		    	min_cent_dist = image.shape[0]
-		    	min_dist_identity = -1
-		    	for identity in largest_grp:
-		    		tmp_cent_dist = abs((image.shape[1]/2) - ped_data[identity][0])
-		    		# print("The image width {}".format(image.shape[1]))
-		    		# print("The center point {} for identity {}".format(ped_data[identity][0], identity))
-		    		if(tmp_cent_dist < min_cent_dist):
-		    			min_cent_dist = tmp_cent_dist
-		    			min_dist_identity = identity
-		    			self.locked_identity = min_dist_identity
-		    			self.reached = False
-
-		    	point_ground_norm = np.matmul(M, ped_data[self.locked_identity])
-		    	point_ground_norm[0] = point_ground_norm[0] / point_ground_norm[2]
-		    	point_ground_norm[1] = point_ground_norm[1] / point_ground_norm[2]
-
-		    	r_ground = self.find_distance(self.fixed_point, point_ground_norm) 
-		    	cv2.circle(warped,(int(point_ground_norm[0]), int(point_ground_norm[1])), 5, (255,0,255), -1)
-		    	theta_ground = -1 * np.arctan([(point_ground_norm[1]-self.fixed_point[1]) / (point_ground_norm[0]-self.fixed_point[0])])
-		    	theta_map = theta_ground - self.offset_angle
-
-		    	x_map = self.ground_origin[0] + r_ground * math.cos(theta_map)
-		    	y_map = self.ground_origin[1] + r_ground * math.sin(theta_map)
-		    	# print("The locked identity data {}".format(ped_data[self.locked_identity]))
-		    	# print("The locked identity is {}".format(self.locked_identity))
-		    	# print("The theta ground {}".format(theta_ground * (180/np.pi)))
-		    	# print("The current turtlebot pose {} -- {} -- {}".format(tb_pose_obj.robot_x, tb_pose_obj.robot_y, tb_pose_obj.robot_th))
-		    	# print("The x_map and y_map {} --- {}".format(x_map, y_map))
-
-		    	r_robot = (math.sqrt((x_map - tb_pose_obj.robot_x)**2 + (y_map - tb_pose_obj.robot_y)**2))
-		    	ang_uncorrected = np.arctan([(y_map - tb_pose_obj.robot_y) / (x_map - tb_pose_obj.robot_x)])
-		    	# print("The robot relative angle is {}".format(robot_rel_ang * (180/np.pi)))
-
-		    	# Translating the map axis to the robot
-		    	x_shift_robot = x_map - tb_pose_obj.robot_x
-		    	y_shift_robot = y_map - tb_pose_obj.robot_y
-
-		    	if x_shift_robot > 0:
-		    		ang_corrected = ang_uncorrected
-
-		    	elif x_shift_robot < 0:
-		    		if y_shift_robot > 0: # 2nd co
-		    			ang_corrected = ang_uncorrected + np.pi
-		    		elif y_shift_robot < 0: # 3rd co
-		    			ang_corrected = ang_uncorrected - np.pi
-
-		    	theta_rotate = ang_corrected - tb_pose_obj.robot_th
-		    	print("theta rotate {}".format(theta_rotate * (180/np.pi)))
-
-		    	# print("Theta_robot before if condition {}".format(theta_robot * (180/np.pi)))
-		    	if (theta_rotate > np.pi):
-		    		theta_rotate = theta_rotate - (2*np.pi) 
-		    	elif (theta_rotate < -np.pi):
-		    		theta_rotate = theta_rotate + (2*np.pi)
-		    	print("theta rotate after pi correction {}".format(theta_rotate * (180/np.pi)))
-		    	# print("The robot distance {} and angle {}".format(r_robot, theta_robot*(180/np.pi)))
-		    	
-		    	if (r_robot < 1):
-		    		self.reached = True
-		    		# print("The reached status {}".format(self.reached))
-
-		    	if (self.reached == False):
-		    		r_theta_obj = Twist()
-		    		r_theta_obj.linear.x = r_robot
-		    		r_theta_obj.linear.y = -theta_rotate
-		    		self.r_theta_pub.publish(r_theta_obj)
-
-		    	else:
-		    		r_theta_obj = Twist()
-		    		r_theta_obj.linear.x = 0
-		    		r_theta_obj.linear.y = 0
-		    		self.r_theta_pub.publish(r_theta_obj)
-
-		    # elif (len(list_set) == 0) and not self.reached and (list(self.ped_data_dict.keys()).count(self.locked_identity) != 0):
-			# 	r_theta = Twist()
-			# 	r_theta.linear.x = self.ped_data_dict[self.locked_identity][2] / 1000
-			# 	r_theta.linear.y = self.ped_data_dict[self.locked_identity][3] * (3.14/180)
-			# 	self.r_theta_pub.publish(r_theta)
-
-			# 	if (self.ped_data_dict[self.locked_identity][2] < 1000):
-			# 		self.reached = True
-			# else:
-			# 	r_theta = Twist()
-			# 	r_theta.linear.x = 0
-			# 	r_theta.linear.y = 0
-			# 	self.r_theta_pub.publish(r_theta)
-			# 	self.locked_identity = -1
-			# 	self.reached = False
-
-
-		    else:
-		    	r_theta = Twist()
-		    	r_theta.linear.x = 0
-		    	r_theta.linear.y = 0
-		    	self.r_theta_pub.publish(r_theta)
-		    	self.locked_identity = -1
-	    print("Reached status {}".format(self.reached))
-		# self.ped_data_dict = {}
-
-	    return warped
+	    # return the warped image 
+	    all_ped_dict = {}
+	    all_ped_dict["annotations"] = []  
+	    for ped_id in ped_data.keys():
+	    	feet_point = np.matmul(M, ped_data[ped_id])
+	    	feet_point[0] = feet_point[0]/ feet_point[2]
+	    	feet_point[1] = feet_point[1]/ feet_point[2]
+	    	ped_dict = {}
+	    	ped_dict["className"] = "pedestrian"
+	    	ped_dict["classId"] = int(ped_id)
+	    	ped_dict["geometryType"] = "cuboid"
+	    	ped_dict["geometry"] = {}
+	    	ped_dict["geometry"]["position"] = {}
+	    	feet_point_line_angle = np.arctan([(feet_point[1]-0) / (feet_point[0]-0)])
+	    	feet_point_distance = (math.sqrt((feet_point[0] - 0)**2 + (feet_point[1] - 0)**2))
+	    	ped_dict["geometry"]["position"]["x"] = feet_point_distance * math.cos(feet_point_line_angle) * 0.0091
+	    	ped_dict["geometry"]["position"]["y"] = feet_point_distance * math.sin(feet_point_line_angle) * 0.0091
+	    	ped_dict["geometry"]["rotation"] = {}
+	    	ped_dict["geometry"]["rotation"]["y"] = 0
+	    	ped_dict["geometry"]["rotation"]["x"] = 0
+	    	ped_dict["geometry"]["rotation"]["z"] = 0
+	    	ped_dict["geometry"]["dimensions"] = {}
+	    	ped_dict["geometry"]["dimensions"]["y"] = 0
+	    	ped_dict["geometry"]["dimensions"]["x"] = 0
+	    	ped_dict["geometry"]["dimensions"]["z"] = 0
+	    	all_ped_dict["annotations"].append(ped_dict)
+	    return warped, all_ped_dict
 
 	def find_distance(self, point1, point2):
 		scale = 0.00963
@@ -336,6 +226,11 @@ def detect(save_img=True):
     t0 = time.time()
 
     tb_pose_obj = Turtlebotgoal()
+
+    frame_number = 0
+    json_list = []
+    textFile = open("ped_data_json.json","w+")
+
     for path, img, im0s, vid_cap in dataset:
         t = time.time()
 
@@ -404,7 +299,11 @@ def detect(save_img=True):
                         # print("The ped dictionary {}".format(ped_data))
                         hg_obj = Homography()
                         undistort_img = hg_obj.undistort(im0)
-                        warped_img = hg_obj.four_point_transform(undistort_img, ped_data, tb_pose_obj)
+                        warped_img, all_ped_dict_ret = hg_obj.four_point_transform(undistort_img, ped_data, tb_pose_obj)
+                        all_ped_dict_ret["name"] = "pedtrajectories"
+                        all_ped_dict_ret["id"] = int(frame_number)
+                        json_list.append(all_ped_dict_ret)
+
                         cv2.imshow('Undistort_img',undistort_img)
                         cv2.imshow('warped_img',warped_img)
                         
@@ -439,6 +338,17 @@ def detect(save_img=True):
                         h = int(vid_cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
                         vid_writer = cv2.VideoWriter(save_path, cv2.VideoWriter_fourcc(*opt.fourcc), fps, (w, h))
                     vid_writer.write(im0)
+
+        frame_number += 1
+
+        if(frame_number>100):
+            break
+    
+    jsonOutput=json.dumps(json_list, indent = 4)
+    textFile.write(jsonOutput)
+    textFile.close()
+
+
 
     if save_txt or save_img:
         print('Results saved to %s' % os.getcwd() + os.sep + out)
