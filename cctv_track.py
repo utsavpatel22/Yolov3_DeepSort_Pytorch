@@ -17,6 +17,7 @@ import numpy as np
 from itertools import combinations
 import math
 from squaternion import Quaternion
+import json
 
 deepsort = DeepSort("deep_sort/deep/checkpoint/ckpt.t7")
 palette = (2 ** 11 - 1, 2 ** 15 - 1, 2 ** 20 - 1)
@@ -335,8 +336,14 @@ def detect(save_img=True):
     # Run inference
     t0 = time.time()
 
+    # dictionary to load into json
+    jsonDictionary = {}
+    frame_id = 0  
+
     tb_pose_obj = Turtlebotgoal()
     for path, img, im0s, vid_cap in dataset:
+        if img is None:
+           break
         t = time.time()
 
         # Get detections
@@ -397,10 +404,14 @@ def detect(save_img=True):
                         bbox_xyxy = outputs[:, :4]
                         identities = outputs[:, -1]
                         ped_data = {}
+                        ped_data_tmp = {}
                         for l in range(bbox_xyxy.shape[0]):
                         	tmp_array = np.expand_dims(np.asarray([(bbox_xyxy[l][0] + bbox_xyxy[l][2]) / 2, bbox_xyxy[l][3], 1]), axis=1) # [x_center, max y, 1]
+                        	tmp_array_list = tmp_array.tolist()
                         	# cv2.circle(im0,(int((bbox_xyxy[l][0] + bbox_xyxy[l][2]) / 2), int(bbox_xyxy[l][3])), 5, (0,0,255), -1)
-                        	ped_data[identities[l]] =  tmp_array
+                        	ped_data[int(identities[l])] =  tmp_array
+                        	ped_data_tmp[int(identities[l])] = tmp_array_list
+                        jsonDictionary[frame_id] = ped_data_tmp
                         # print("The ped dictionary {}".format(ped_data))
                         hg_obj = Homography()
                         undistort_img = hg_obj.undistort(im0)
@@ -414,6 +425,7 @@ def detect(save_img=True):
                         draw_boxes(im0, bbox_xyxy, identities)
                     #print('\n\n\t\ttracked objects')
                     #print(outputs)
+
 
             # Print time (inference + NMS)
             print('%sDone. (%.3fs)' % (s, time.time() - t))
@@ -439,6 +451,11 @@ def detect(save_img=True):
                         h = int(vid_cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
                         vid_writer = cv2.VideoWriter(save_path, cv2.VideoWriter_fourcc(*opt.fourcc), fps, (w, h))
                     vid_writer.write(im0)
+        frame_id += 1
+    textFile = open("json.txt","w+")
+    jsonOutput=json.dumps(jsonDictionary, indent = 4)
+    textFile.write(jsonOutput)
+    textFile.close()
 
     if save_txt or save_img:
         print('Results saved to %s' % os.getcwd() + os.sep + out)
