@@ -1,5 +1,6 @@
 # output folder
 output/
+imgs/
 .ipy*
 deep_sort/__pycache__/*.pyc
 deep_sort/deep/__pycache__/*.pyc
