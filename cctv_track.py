@@ -407,10 +407,11 @@ def detect(save_img=True):
                         ped_data_tmp = {}
                         for l in range(bbox_xyxy.shape[0]):
                         	tmp_array = np.expand_dims(np.asarray([(bbox_xyxy[l][0] + bbox_xyxy[l][2]) / 2, bbox_xyxy[l][3], 1]), axis=1) # [x_center, max y, 1]
-                        	tmp_array_list = tmp_array.tolist()
+                        	tmp_array_json = np.expand_dims(np.asarray([bbox_xyxy[l][0], bbox_xyxy[l][1], bbox_xyxy[l][2], bbox_xyxy[l][3]]), axis=1)
+                        	tmp_array_json = tmp_array_json.tolist()
                         	# cv2.circle(im0,(int((bbox_xyxy[l][0] + bbox_xyxy[l][2]) / 2), int(bbox_xyxy[l][3])), 5, (0,0,255), -1)
                         	ped_data[int(identities[l])] =  tmp_array
-                        	ped_data_tmp[int(identities[l])] = tmp_array_list
+                        	ped_data_tmp[int(identities[l])] = tmp_array_json
                         jsonDictionary[frame_id] = ped_data_tmp
                         # print("The ped dictionary {}".format(ped_data))
                         hg_obj = Homography()
@@ -423,6 +424,7 @@ def detect(save_img=True):
                         # print("The location of bounding boxes {}".format(bbox_xyxy[0][1]))
                         # print("The id {}".format(identities))
                         draw_boxes(im0, bbox_xyxy, identities)
+
                     #print('\n\n\t\ttracked objects')
                     #print(outputs)
 
@@ -451,7 +453,14 @@ def detect(save_img=True):
                         h = int(vid_cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
                         vid_writer = cv2.VideoWriter(save_path, cv2.VideoWriter_fourcc(*opt.fourcc), fps, (w, h))
                     vid_writer.write(im0)
+        if not os.path.isdir('output_frames'):
+            os.mkdir('output_frames')
+        os.chdir('output_frames')
+        cv2.imwrite(str(frame_id)+'-.jpg', im0)
+        os.chdir('..')
         frame_id += 1
+        print(frame_id)
+    os.chdir('output_frames')
     textFile = open("json.txt","w+")
     jsonOutput=json.dumps(jsonDictionary, indent = 4)
     textFile.write(jsonOutput)
